@@ -119,7 +119,7 @@ class FFmpegAudioFile(object):
         try:
             self.proc = popen_multiple(
                 COMMANDS,
-                ['-i', filename, '-f', 's16le', '-'],
+                ['-i', filename, '-f', 's16le', '-ar', '11025', '-ac', '1', '-'],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             )
 
