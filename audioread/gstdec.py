@@ -50,7 +50,7 @@ from __future__ import division
 
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst
+from gi.repository import GLib, Gst
 
 import sys
 import threading
@@ -123,7 +123,6 @@ class IncompleteGStreamerError(GStreamerError):
 _shared_loop_thread = None
 _loop_thread_lock = threading.RLock()
 
-GObject.threads_init()
 Gst.init(None)
 
 def get_loop_thread():
@@ -143,7 +142,7 @@ class MainLoopThread(threading.Thread):
     """
     def __init__(self):
         super(MainLoopThread, self).__init__()
-        self.loop = GObject.MainLoop()
+        self.loop = GLib.MainLoop()
         self.daemon = True
 
     def run(self):
@@ -369,9 +368,18 @@ class GstAudioFile(object):
 
     # Cleanup.
     def close(self, force=False):
+        """Close the file and clean up associated resources.
+
+        Calling `close()` a second time has no effect.
+        """
         if self.running or force:
             self.running = False
             self.finished = True
+
+            # Unregister for signals, which we registered for above with
+            # `add_signal_watch`. (Without this, GStreamer leaks file
+            # descriptors.)
+            self.pipeline.get_bus().remove_signal_watch()
 
             # Stop reading the file.
             self.dec.set_property("uri", None)
@@ -388,6 +396,11 @@ class GstAudioFile(object):
 
             # Halt the pipeline (closing file).
             self.pipeline.set_state(Gst.State.NULL)
+
+            # Delete the pipeline object. This seems to be necessary on Python
+            # 2, but not Python 3 for some reason: on 3.5, at least, the
+            # pipeline gets dereferenced automatically.
+            del self.pipeline
 
     def __del__(self):
         self.close()
